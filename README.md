@@ -35,7 +35,7 @@ Included:
 - `data/class_dictionary.json` — the fixed observation-to-class dictionary and anatomy rules.
 - `data/study_manifest.csv` — the 5,000 studies (one study per patient, one reconstruction per study, train split only).
 - `data/prm_format/*.jsonl` — the three label sets in TRL `PRMTrainer` format (`prompt`, `completions`, `labels`).
-- `pipeline/` — the nine scripts that produced everything above, in order.
+- `pipeline/` — the ten scripts that produced everything above and perform Best-of-N selection with the trained reward model, in order.
 - `figures/` — the pipeline diagram and the two summary figures above.
 - `scripts/verify_release.py` — recomputes the counts in the table and checks that the released labels can be rebuilt from the released inputs.
 
@@ -92,9 +92,12 @@ python pipeline/06_ctclip_labels.py    --taus 0.3,0.4
 OPENROUTER_API_KEY=... python pipeline/07_llm_labels.py --reports <ct-rate>/train_reports.csv
 python pipeline/08_build_prm_dataset.py --label label_tau030 --out data/prm_format/ctclip_tau030.jsonl --hf-dir work/hf_tau030
 python pipeline/09_train_prm.py        --base Qwen/Qwen2.5-0.5B --dataset work/hf_tau030 --out work/prm_0.5b
+python pipeline/10_select_bestofn.py   --model work/prm_0.5b/final --candidates <n-candidates>.jsonl --out selected.jsonl
 ```
 
-Steps 2, 3 and 5 need a GPU; steps 2 and 3 additionally need the CT-CHAT / CT-CLIP code and weights; step 7 needs the CT-RATE reference reports and an API key. Steps 4, 6 and 8 run on CPU from the released files. Stochastic generation in step 2 is seeded but depends on the hardware and library versions, so a rerun gives a corpus of the same construction rather than these exact sentences; the released `data/` is therefore the artefact of record. Everything from step 6 onwards is deterministic given `data/`.
+Steps 2, 3, 5 and 10 need a GPU; steps 2 and 3 additionally need the CT-CHAT / CT-CLIP code and weights; step 7 needs the CT-RATE reference reports and an API key. Steps 4, 6 and 8 run on CPU from the released files. Stochastic generation in step 2 is seeded but depends on the hardware and library versions, so a rerun gives a corpus of the same construction rather than these exact sentences; the released `data/` is therefore the artefact of record. Everything from step 6 onwards is deterministic given `data/` and, for step 10, a trained checkpoint and a set of sampled candidates (step 2, run at inference time with N samples per volume rather than 1).
+
+Step 10 implements Best-of-N selection: each candidate is scored sentence by sentence with the trained reward model, and the candidate with the highest mean sentence-support probability is returned (Eq. 2 of the paper). It takes a trained checkpoint from step 9 and a JSONL of sampled candidates per volume; it does not require the CT-CHAT generator itself, only its outputs.
 
 To check the release itself:
 
