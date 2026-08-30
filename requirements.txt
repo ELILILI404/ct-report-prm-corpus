@@ -1,12 +1,13 @@
-# CPU steps (04, 06, 08, verify)
-pandas>=2.0
-pyarrow>=14
-numpy>=1.24
-requests>=2.31          # 07
-datasets>=2.19          # 08 --hf-dir, 09
+# Python 3.10 (pinned to the environment the release was built and trained in)
+# CPU steps (04, 06, 08, 11, verify)
+pandas==2.2.3
+pyarrow==18.1.0
+numpy==2.1.3
+requests==2.32.3        # 07 -- not independently version-locked against the training run; confirm before release
+datasets==3.2.0         # 08 --hf-dir, 09
 # GPU steps
-torch>=2.1              # 02, 03, 05, 09
-transformers>=4.44      # 03, 09
-trl>=0.13               # 09 (PRMTrainer)
-radgraph>=0.1.10        # 05
+torch==2.4.0            # 02, 03, 05, 09
+transformers==4.46.3    # 03, 09, 10, 11
+trl==0.15.0             # 09 (PRMTrainer)
+radgraph==0.1.13        # 05 -- not independently version-locked against the training run; confirm before release
 # 02 and 03 additionally need the CT-CHAT and CT-CLIP repositories on sys.path
