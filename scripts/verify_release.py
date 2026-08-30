@@ -2,10 +2,15 @@
 
     python scripts/verify_release.py
 
-1. data/sentences.parquet has 81,452 rows over 5,000 studies; 20,551 carry a class.
+1. data/sentences.parquet has 81,452 rows over 5,000 studies; 20,551 carry a class
+   (from 4,955 of the 5,000 studies -- the other 45 have no sentence naming one
+   of the 18 CT-RATE classes, so they contribute to the LLM set only).
 2. Recomputing the CT-CLIP labels from the released entities and p(c) reproduces
    label_tau030 / label_tau040 exactly.
 3. Each PRM-format file matches the corresponding column (records, sentences, support rate).
+4. The cross-label statistics cited in the paper's discussion -- overall
+   image-vs-LLM agreement, and the assert/deny support split for each rule --
+   are recomputed from data/sentences.parquet and printed, not just asserted.
 """
 import json
 import subprocess
@@ -29,7 +34,11 @@ if len(df) != 81452 or df.study_id.nunique() != 5000:
     fail(f"sentence table: {len(df)} rows / {df.study_id.nunique()} studies")
 if df.radgraph_class.notna().sum() != 20551:
     fail(f"{df.radgraph_class.notna().sum()} sentences with a class")
-print("sentence table: 81,452 sentences, 5,000 studies, 20,551 with a mapped class  ok")
+n_studies_with_class = df.loc[df.radgraph_class.notna(), "study_id"].nunique()
+if n_studies_with_class != 4955:
+    fail(f"{n_studies_with_class} studies contribute to the image-evidence set, expected 4,955")
+print(f"sentence table: 81,452 sentences, 5,000 studies (LLM set); "
+      f"20,551 with a mapped class, {n_studies_with_class} studies (image-evidence set)  ok")
 
 # --- recompute image-evidence labels into a scratch copy and compare ---
 tmp = ROOT / "work" / "_verify"
@@ -45,6 +54,7 @@ saved.to_parquet(DATA / "sentences.parquet", index=False)  # restore byte-identi
 print("recomputed labels identical to released columns  ok")
 
 # --- PRM-format files ---
+REWARD_MODEL = {"ctclip_tau030": "0.5B", "ctclip_tau040": "3B", "llm_reference": "comparator (0.5B and 3B)"}
 for name, (n_rec, n_sent) in EXPECT.items():
     col = {"ctclip_tau030": "label_tau030", "ctclip_tau040": "label_tau040", "llm_reference": "label_llm"}[name]
     recs = [json.loads(l) for l in open(DATA / "prm_format" / f"{name}.jsonl", encoding="utf-8")]
@@ -54,5 +64,18 @@ for name, (n_rec, n_sent) in EXPECT.items():
         fail(f"{name}: {len(recs)} records / {sents} sentences")
     if pos != int(df[col].sum()):
         fail(f"{name}: supported count {pos} != column sum {int(df[col].sum())}")
-    print(f"{name:15s} {len(recs):5d} records {sents:6d} sentences {100 * pos / sents:5.1f}% supported  ok")
-print("ALL CHECKS PASSED")
+    print(f"{name:15s} {len(recs):5d} records {sents:6d} sentences {100 * pos / sents:5.1f}% supported "
+          f"(used to train the {REWARD_MODEL[name]} reward model)  ok")
+
+# --- cross-label statistics cited in the paper's discussion ---
+both = df[df.radgraph_class.notna()]  # the 20,551 sentences with both an image and an LLM label
+agreement = 100 * (both.label_tau030 == both.label_llm).mean()
+print(f"\nimage (tau=0.3) vs LLM label agreement, {len(both)} shared sentences: {agreement:.1f}%")
+
+for rule, col in (("image (tau=0.3)", "label_tau030"), ("LLM (vs. reference)", "label_llm")):
+    by_polarity = both.groupby("polarity")[col].mean() * 100
+    assert_pct = by_polarity.get("present", float("nan"))
+    deny_pct = by_polarity.get("absent", float("nan"))
+    print(f"{rule:22s} supports {assert_pct:5.1f}% of assertions, {deny_pct:5.1f}% of denials")
+
+print("\nALL CHECKS PASSED")
