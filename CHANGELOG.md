@@ -27,6 +27,16 @@ this pull request:
   this release, with a Python 3.10 note; two packages (`requests`,
   `radgraph`) are pinned to current versions but were not independently
   verified against the training run's environment records -- flagged inline.
+- Added `data/val_manifest.csv` (the real 3,039-volume validation manifest,
+  with the 1,564-case series-dedup flag) and `data/candidates_pool/*.jsonl`
+  (the real 32-sample-per-volume candidate pool used for Table 1 and
+  Figure 3, 24 shards, 128 MB, 3,039 records) -- both were flagged as an
+  unresolved reproducibility gap in this PR's first revision; the training
+  environment's evaluation-output CSVs turned out to still hold the exact
+  data, so this closes that gap rather than leaving it open for camera-ready.
+  Each candidate-pool record had its local filesystem path (`npz`, which
+  embedded the authors' cluster username) stripped before release;
+  `scripts/verify_release.py` now checks that field is gone.
 
 ## [v1.0-anon] (planned, not yet tagged)
 

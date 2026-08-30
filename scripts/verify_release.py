@@ -11,6 +11,10 @@
 4. The cross-label statistics cited in the paper's discussion -- overall
    image-vs-LLM agreement, and the assert/deny support split for each rule --
    are recomputed from data/sentences.parquet and printed, not just asserted.
+5. data/val_manifest.csv has 3,039 validation volumes, 1,564 flagged
+   in_dedup1564; data/candidates_pool/ has the same 3,039 volumes (matching
+   val_manifest.csv exactly, not just in count) across its 24 shards, 32
+   candidates each.
 """
 import json
 import subprocess
@@ -77,5 +81,30 @@ for rule, col in (("image (tau=0.3)", "label_tau030"), ("LLM (vs. reference)", "
     assert_pct = by_polarity.get("present", float("nan"))
     deny_pct = by_polarity.get("absent", float("nan"))
     print(f"{rule:22s} supports {assert_pct:5.1f}% of assertions, {deny_pct:5.1f}% of denials")
+
+# --- validation manifest and candidate pool ---
+manifest = pd.read_csv(DATA / "val_manifest.csv")
+if len(manifest) != 3039:
+    fail(f"val_manifest.csv: {len(manifest)} rows, expected 3,039")
+n_dedup = int(manifest.in_dedup1564.sum())
+if n_dedup != 1564:
+    fail(f"val_manifest.csv: {n_dedup} rows flagged in_dedup1564, expected 1,564")
+print(f"\nval_manifest.csv: 3,039 validation volumes, {n_dedup} flagged in_dedup1564  ok")
+
+pool_ids = []
+for shard in sorted((DATA / "candidates_pool").glob("shard*.jsonl")):
+    for line in open(shard, encoding="utf-8"):
+        row = json.loads(line)
+        if len(row["candidates"]) != 32:
+            fail(f"{shard.name}: {row['volume_id']} has {len(row['candidates'])} candidates, expected 32")
+        if "npz" in row:
+            fail(f"{shard.name}: {row['volume_id']} still carries the unscrubbed 'npz' path field")
+        pool_ids.append(row["volume_id"])
+if len(pool_ids) != 3039:
+    fail(f"candidates_pool: {len(pool_ids)} records across all shards, expected 3,039")
+if set(pool_ids) != set(manifest.volume_id):
+    fail("candidates_pool volume_ids do not match val_manifest.csv exactly")
+print(f"candidates_pool: 24 shards, {len(pool_ids)} volumes, 32 candidates each, "
+      f"volume_ids match val_manifest.csv exactly, no leftover 'npz' field  ok")
 
 print("\nALL CHECKS PASSED")

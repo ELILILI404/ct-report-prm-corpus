@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 # Reproduce Figure 3 (test-time scaling, N in {1,2,4,8,16,32}).
 #
-# Same inputs and the same caveats as reproduce/run_table1.sh: this documents
-# the procedure rather than running end to end, because the CT-RATE
-# validation reports and the 32-sample candidate pool are not shipped here.
+# Same inputs as reproduce/run_table1.sh: data/val_manifest.csv and
+# data/candidates_pool/ are included in this repository. The one gap is the
+# same as run_table1.sh's -- the RadBERT-based labeller (step 3 there) is
+# not part of this release.
 set -euo pipefail
 
-OUT=reproduce/out
+OUT=out
 mkdir -p "$OUT"
+[ -f "$OUT/candidates.jsonl" ] || cat ../data/candidates_pool/shard*.jsonl > "$OUT/candidates.jsonl"
 
-# 1. Reuse the 32-sample-per-volume candidate pool from run_table1.sh step 1
-#    (do not resample per N -- Figure 3 uses nested prefixes of one common
-#    pool, so N=2 is the first 2 of the same 32 samples used for N=32, etc.,
-#    which is why Random-of-N's mean does not change monotonically with N in
+# 1. Take nested prefixes of the shipped 32-sample pool per N (do not
+#    resample -- Figure 3 uses nested prefixes of one common pool, so N=2 is
+#    the first 2 of the same 32 samples used for N=32, etc., which is why
+#    Random-of-N's mean does not change monotonically with N in
 #    reproduce/results_scaling.csv: it is resampling *within* a fixed pool).
 for N in 1 2 4 8 16 32; do
   python - "$N" <<'PY'
 import json, sys
 n = int(sys.argv[1])
-with open("reproduce/out/candidates.jsonl", encoding="utf-8") as fin, \
-     open(f"reproduce/out/candidates_N{n}.jsonl", "w", encoding="utf-8") as fout:
+with open("out/candidates.jsonl", encoding="utf-8") as fin, \
+     open(f"out/candidates_N{n}.jsonl", "w", encoding="utf-8") as fout:
     for line in fin:
         row = json.loads(line)
         row["candidates"] = row["candidates"][:n]
